@@ -208,3 +208,4 @@ __marimo__/
 
 # Specyfic env files
 project_config.py
+data/
