@@ -1,0 +1,13 @@
+Date,Category,Action Item,Status / Outcome
+2025-11-18,Infrastructure,Setup Legacy Infrastructure (AWS S3),Completed (Migrated to Azure)
+2025-11-18,Security,Implement Config Module Pattern (Python),Completed (Replaced by Key Vault)
+2025-11-25,DevOps,Repository Restructuring & Feature Branching,Completed
+2025-11-28,CI/CD,Setup GitHub Actions (Linter/Flake8),Completed
+2025-12-09,Engineering,Implement Silver Layer Parsing Logic (Sysmon Event 10),In Progress
+2026-01-14,Architecture,Decision: Migrate to Azure Ecosystem (ADR-007),Completed
+2026-01-14,Infrastructure,Provision Azure Data Lake Gen2 & Resource Group,Completed
+2026-01-14,Security,Configure Azure Key Vault & Databricks Secret Scopes,Completed (Zero-Trust implemented)
+2026-01-14,Engineering,Refactor Ingestion: Implement Auto Loader (cloudFiles),Completed
+2026-01-14,Engineering,Implement Checkpointing for Fault Tolerance,Completed
+2026-01-14,Documentation,Update README & Migration Notice,Completed
+2026-01-15,Engineering,Silver Layer: Data Cleaning & Delta Tables,Planned
