@@ -1,57 +1,76 @@
-# Cyber-Trace: Security Log Analysis Pipeline 
+# 🛡️ Cyber-Trace: Security Log Analysis Pipeline
 
 ![Python](https://img.shields.io/badge/Python-3.10+-blue.svg)
-![Databricks](https://img.shields.io/badge/Databricks-Free_Tier-orange.svg)
-![AWS](https://img.shields.io/badge/AWS-S3-yellow.svg)
-![Status](https://img.shields.io/badge/Status-In_Development-green.svg)
+![Azure](https://img.shields.io/badge/Cloud-Azure-0078D4.svg)
+![Databricks](https://img.shields.io/badge/Databricks-Auto_Loader-FF3621.svg)
+![Status](https://img.shields.io/badge/Status-Refactored-success.svg)
 
 ## Project Overview
 **Cyber-Trace** is a data engineering project designed to ingest, process, and analyze cybersecurity logs (focusing on **MITRE ATT&CK** scenarios).
 
 The goal is to build a production-ready ETL pipeline using the **Medallion Architecture** (Bronze/Silver/Gold) capable of detecting anomalies and visualizing threat patterns from raw datasets (e.g., Mordor Project).
 
+> **🔄 Migration Notice:** This project has been migrated from **AWS S3** to **Azure Data Lake Gen2 (ADLS)** to leverage Databricks native features like Auto Loader and Unity Catalog integration.
+
 ## Architecture & Tech Stack
-* **Cloud Infrastructure:** AWS S3 (Storage) + Databricks Community Edition (Compute).
-* **ETL Engine:** Apache Spark (PySpark).
-* **Data Format:** JSON (Raw Logs) -> Delta Lake (Planned).
-* **Orchestration:** Databricks Notebooks (Prototype phase).
+* **Cloud Infrastructure:** Azure Data Lake Gen2 (Storage) + Azure Databricks (Compute).
+* **Security:** Azure Key Vault + Databricks Secret Scopes.
+* **ETL Engine:** Apache Spark (PySpark) Structured Streaming.
+* **Ingestion Pattern:** Databricks **Auto Loader** (`cloudFiles`).
+* **Data Format:** JSON (Raw) -> Delta Lake (Planned).
 
-## Architectural Decisions & Constraints (ADR)
-Since this project runs on a **Databricks Free Tier (Serverless Compute)** environment, several architectural adaptations were made to mimic production standards without incurring costs:
+## Architectural Decisions Records (ADR)
+Moving from a legacy prototype to a robust cloud architecture, several key decisions were made to ensure scalability and security:
 
-* **Authentication:** Due to the inability to set global Spark configurations (`spark.conf.set` is restricted in Free Tier), I implemented a **Direct URI Authentication** pattern using URL-encoded credentials injected securely at runtime.
-* **Secrets Management:** Sensitive credentials are decoupled from the codebase using a local `project_config.py` module (Git-ignored) to maintain security best practices.
-* **FinOps:** The architecture is designed to be strictly zero-cost during the prototyping phase (leveraging AWS Free Tier limits and Databricks Community Edition).
+### 1. Ingestion: Auto Loader vs. Standard Read
+* **Decision:** Replaced standard `spark.read.json()` with Databricks **Auto Loader** (`cloudFiles`).
+* **Context:** Standard directory listing in cloud storage (S3/ADLS) is slow and expensive for large datasets.
+* **Benefit:** Auto Loader efficiently detects new files as they arrive, handles **Schema Evolution** automatically, and provides exactly-once processing guarantees via checkpointing.
+
+
+
+### 2. Security: Key Vault vs. Local Config
+* **Decision:** Migrated from local `project_config.py` files to **Azure Key Vault** backed by **Databricks Secret Scopes**.
+* **Context:** Storing credentials in code or local files poses a security risk and complicates collaboration.
+* **Benefit:** Credentials (SAS Tokens/Access Keys) are never exposed in the notebook. Access is managed via IAM roles and retrieved at runtime using `dbutils.secrets.get()`.
+
+### 3. Fault Tolerance: Checkpointing
+* **Decision:** Implemented explicit checkpointing for the streaming query.
+* **Benefit:** Ensures the pipeline is resilient to cluster failures and restarts, resuming processing exactly where it left off without data duplication.
 
 ## Getting Started
-### Prerequisites
-* Python 3.10+
-* Access to an AWS S3 Bucket
-* Databricks Community Edition Account
 
-### Installation
-1.  Clone the repository:
+### Prerequisites
+* Azure Subscription with **ADLS Gen2** Storage Account.
+* Azure **Key Vault** containing the storage access key.
+* Databricks Workspace (Premium tier recommended for full security features).
+
+### Installation & Setup
+1.  **Clone the repository:**
     ```bash
-    git clone [https://github.com/YOUR_USERNAME/Cyber-Trace.git](https://github.com/YOUR_USERNAME/Cyber-Trace.git)
+    git clone [https://github.com/JakubMilczarczyk/Cyber-Trace.git](https://github.com/JakubMilczarczyk/Cyber-Trace.git)
     ```
-2.  Install dependencies (for local testing):
-    ```bash
-    pip install -r requirements.txt
-    ```
-3.  **Configuration:** Create a `project_config.py` file in the root directory (do NOT commit this):
-    ```python
-    settings = {
-        "AWS_ACCESS_KEY": "YOUR_KEY",
-        "AWS_SECRET_KEY": "YOUR_SECRET",
-        "S3_BUCKET": "your-bucket-name",
-        "S3_FOLDER": "raw_logs",
-        "S3_FILE_NAME": "target_file.json"
-    }
-    ```
+
+2.  **Azure Setup:**
+    * Create a container named `bronze` in your ADLS account.
+    * Upload the raw Mordor logs (JSON) to a `raw_logs` folder.
+    * Add your Storage Access Key to Azure Key Vault (Name: `storage-access-key`).
+
+3.  **Databricks Configuration:**
+    * Create a Secret Scope named `cybertrace-secrets` linked to your Key Vault.
+    * Verify access in a notebook:
+        ```python
+        dbutils.secrets.list("cybertrace-secrets")
+        ```
+
+4.  **Run the Pipeline:**
+    * Open `notebooks/01_ingest_bronze.ipynb`.
+    * Run the initialization cell to configure authentication.
+    * Run the streaming cell to start ingesting data.
 
 ## Roadmap
-- [x] **Phase 1:** Ingestion (Bronze Layer) - AWS S3 Connection & Raw Read.
-- [ ] **Phase 2:** Transformation (Silver Layer) - Schema Parsing & Data Cleaning.
+- [x] **Phase 1:** Ingestion (Bronze Layer) - Migrated to Azure & Auto Loader.
+- [ ] **Phase 2:** Transformation (Silver Layer) - Data Cleaning & Schema Enforcement (Delta Lake).
 - [ ] **Phase 3:** Aggregation (Gold Layer) - Business Logic & Threat Metrics.
 - [ ] **Phase 4:** CI/CD & Unit Testing.
 
