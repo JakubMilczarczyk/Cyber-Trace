@@ -3,10 +3,10 @@ Test cases for silver layer.
 """
 
 import pytest
-from src.transformations import standarize_security_logs
+from src.transformations import standardize_security_logs
 from pyspark.sql.types import StructType, StructField, StringType, IntegerType, ArrayType
 
-def test_standarize_sysmon_event_10(spark):
+def test_standardize_sysmon_event_10(spark):
     """
     Scenario: Sysmon Event 10 (Process Access) from Mordor Dataset.
     Goal: Verify if flat JSON fields are correctly mapped to Silver schema.
@@ -26,7 +26,7 @@ def test_standarize_sysmon_event_10(spark):
     df_raw = spark.createDataFrame(data)
 
     # 2. Act
-    df_silver = standarize_security_logs(df_raw)
+    df_silver = standardize_security_logs(df_raw)
 
     # 3. Assert
     result = df_silver.collect()[0]
@@ -38,7 +38,7 @@ def test_standarize_sysmon_event_10(spark):
 
     assert result["event_timestamp"].year == 2020
 
-def test_standarize_powershell_missing_fields(spark):
+def test_standardize_powershell_missing_fields(spark):
     """
     Scenario: PowerShell Event 4103.
     Goal: Verify that missing fields (e.g., SourceImage) result in Nulls, not Errors.
@@ -52,9 +52,8 @@ def test_standarize_powershell_missing_fields(spark):
     }]
 
     df_raw = spark.createDataFrame(data)
-    df_silver = standarize_security_logs(df_raw)
+    df_silver = standardize_security_logs(df_raw)
     result = df_silver.collect()[0]
 
     assert result["event_id"] == 4103
     assert result["process_image"] is None  # SourceImage was missing
-
