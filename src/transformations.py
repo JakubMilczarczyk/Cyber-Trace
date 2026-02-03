@@ -1,62 +1,89 @@
-"""Main transformations for silver layer data."""
+"""
+Silver layer transformations.
+Standarizes raw security logs into a schema optimized for Threat Hunting.
+"""
 
 from pyspark.sql import DataFrame
-from pyspark.sql.functions import col, when, to_timestamp
+from pyspark.sql import functions as F
+from pyspark.sql.types import TimestampType, IntegerType
 
-def flatten_security_logs(df: DataFrame) -> DataFrame:
+def standardize_security_logs(df: DataFrame) -> DataFrame:
     """
-    Standarize and flatten security logs (Mordor/Sysmon/Windows).
-    Chose main columns to Lateral Movement analysys.
+    Standardizes schema for mixed security logs (Sysmon, PowerShell).
+    Handles both flat and nested JSON structures via coalescing.
 
     Args:
-        df (DataFrame): Raw security logs DataFrame.
+        df (DataFrame): Raw Bronze DataFrame. 
 
     Returns:
-        DataFrame: Flattened security logs DataFrame (Silver Layer).
+        DataFrame: Standardized Silver DataFrame.
     """
-    if df.rdd.isEmpty():
-        return df
-    
-    columns_to_select = []
+    # Helper Function: Safe Column Select
+    def safe_col(col_name: str):
+        if col_name in df.columns:
+            return F.col(col_name)
+        return F.lit(None)
 
-    if '@timestamp' in df.columns:
-        columns_to_select.append(col('@timestamp').cast('timestamp').alias('event_timestamp'))
-    elif 'TimeCreated' in df.columns:
-        columns_to_select.append(col('TimeCreated').cast('timestamp').alias('event_timestamp'))
-    
-    if 'EventID' in df.columns:
-        columns_to_select.append(col('EventID').cast('integer').alias('event_id'))
-    
-    if 'Computer' in df.columns:
-        columns_to_select.append(col('Computer').alias('hostname'))
-    elif 'Hostname' in df.columns:
-        columns_to_select.append(col('Hostname').alias('hostname'))
+    # Timestamp Standardization
+    timestamp_col = F.coalesce(
+        safe_col("@timestamp"),
+        safe_col("EventTime")
+    ).cast(TimestampType())
 
-    if 'Channel' in df.columns:
-        columns_to_select.append(col('Channel').alias('log_channel'))
-    
-    if 'EventData' in df.columns:
-        # Source User / Account Name
-        columns_to_select.append(col("EventData.User").alias("user_account"))
-        columns_to_select.append(col("EventData.SourceUser").alias("source_user"))
-        columns_to_select.append(col("EventData.TargetUserName").alias("target_user"))
+    # Hostname Standardization
+    host_col = F.coalesce(
+        safe_col("Hostname"),
+        safe_col("host"),
+        safe_col("Computer")
+    )
+
+    # User Standardization
+    user_col = F.coalesce(
+        safe_col("AccountName"),
+        safe_col("User"),
+        safe_col("UserID")
+    )
+
+    # Nasted Fields Handling
+    def secure_nested(flat_name, nasted_name):
+        cols_to_check = []
+
+        if flat_name in df.columns:
+            cols_to_check.append(F.col(flat_name))
+
+        if "EventData" in df.columns:
+            cols_to_check.append(F.col(nasted_name))
+
+        if not cols_to_check:
+            return F.lit(None).cast("string")
         
-        # Network
-        columns_to_select.append(col("EventData.SourceIp").alias("source_ip"))
-        columns_to_select.append(col("EventData.DestinationIp").alias("dest_ip"))
-        columns_to_select.append(col("EventData.DestinationPort").alias("dest_port"))
-        
-        # Process
-        columns_to_select.append(col("EventData.Image").alias("process_image"))
-        columns_to_select.append(col("EventData.TargetImage").alias("target_process_image"))
-        columns_to_select.append(col("EventData.CommandLine").alias("command_line"))
+        return F.coalesce(*cols_to_check)
     
-    if 'CallTrace' in df.columns:
-        columns_to_select.append(col('CallTrace').alias('call_trace'))
+    # Define Transformations
+    df_silver = df.select(
+        timestamp_col.alias("event_timestamp"),
     
-    if 'AccountName' in df.columns:
-        columns_to_select.append(col('AccountName').alias('account_name'))
-    
-    transformed_df = df.select(*columns_to_select)
+        # Event ID
+        safe_col("EventID").cast(IntegerType()).alias("event_id"),
 
-    return transformed_df
+        safe_col("Channel").alias("log_channel"),
+        host_col.alias("hostname"),
+        user_col.alias("user_account"),
+
+        # Process / Ececution Context
+        secure_nested("SourceImage", "EventData.SourceImage").alias("process_image"),
+        secure_nested("TargetImage", "EventData.TargetImage").alias("target_process_image"),
+        secure_nested("CommandLine", "EventData.CommandLine").alias("command_line"),
+
+        # Network Context
+        secure_nested("SourceIp", "EventData.SourceIp").alias("source_ip"),
+        secure_nested("DestinationIp", "EventData.DestinationIp").alias("dest_ip"),
+        secure_nested("DestinationPort", "EventData.DestinationPort").alias("dest_port"),
+
+        # Threat Context
+        safe_col("tags").alias("detection_tags")
+    )
+
+    # Data Quality Checks
+    return df_silver.filter(F.col("event_timestamp").isNotNull())
+
