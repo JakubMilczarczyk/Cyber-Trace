@@ -53,7 +53,7 @@ def standardize_security_logs(df: DataFrame) -> DataFrame:
         
         # Check for nested structure defensively
         try:
-            colls_to_check.append(F.col(nested_name))
+            cols_to_check.append(F.col(nested_name))
         except:
             pass
 
