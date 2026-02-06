@@ -16,7 +16,7 @@ class Paths:
     CHECKPOINT_BASE = f"{BASE_PATH}/checkpoints"
     CHECKPOINT_BRONZE = f"{BASE_PATH}/checkpoints/bronze_mordor_logs"
     CHECKPOINT_SILVER = f"{BASE_PATH}/checkpoints/silver_mordor_logs"
-    GOLD = f"{BASE_PATH}/gold/threat_stats"
+    GOLD_THREATS = f"{BASE_PATH}/gold/threats_stats"
     QUARANTINE = f"{BASE_PATH}/_quarantine"
 
 
