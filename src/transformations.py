@@ -44,15 +44,18 @@ def standardize_security_logs(df: DataFrame) -> DataFrame:
         safe_col("UserID")
     )
 
-    # Nasted Fields Handling
-    def secure_nested(flat_name, nasted_name):
+    # Nested Fields Handling
+    def secure_nested(flat_name, nested_name):
         cols_to_check = []
 
         if flat_name in df.columns:
             cols_to_check.append(F.col(flat_name))
-
-        if "EventData" in df.columns:
-            cols_to_check.append(F.col(nasted_name))
+        
+        # Check for nested structure defensively
+        try:
+            colls_to_check.append(F.col(nested_name))
+        except:
+            pass
 
         if not cols_to_check:
             return F.lit(None).cast("string")
@@ -62,15 +65,12 @@ def standardize_security_logs(df: DataFrame) -> DataFrame:
     # Define Transformations
     df_silver = df.select(
         timestamp_col.alias("event_timestamp"),
-    
-        # Event ID
         safe_col("EventID").cast(IntegerType()).alias("event_id"),
-
         safe_col("Channel").alias("log_channel"),
         host_col.alias("hostname"),
         user_col.alias("user_account"),
 
-        # Process / Ececution Context
+        # Process / Execution Context
         secure_nested("SourceImage", "EventData.SourceImage").alias("process_image"),
         secure_nested("TargetImage", "EventData.TargetImage").alias("target_process_image"),
         secure_nested("CommandLine", "EventData.CommandLine").alias("command_line"),
