@@ -33,9 +33,8 @@ def test_standardize_sysmon_event_10(spark):
 
     assert result["event_id"] == 10
     assert result["hostname"] == "WORKSTATION5.theshire.local"
-
     assert result["process_image"] == "C:\\windows\\system32\\svchost.exe"
-
+    assert result["user_account"] == "SYSTEM"
     assert result["event_timestamp"].year == 2020
 
 def test_standardize_powershell_missing_fields(spark):
