@@ -29,7 +29,7 @@ def standardize_security_logs(df: DataFrame) -> DataFrame:
         
         # Check for nested structure defensively
         if nested_parent in df_columns:
-            cols_to_check.append(F.col(f"{nested_parent}.{nested_name}"))
+            cols_to_check.append(F.col(f"{nested_parent}.{nested_field}"))
 
         if not cols_to_check:
             return F.lit(None).cast("string")
