@@ -1,6 +1,7 @@
 """
 Silver layer transformations.
-Standarizes raw security logs into a schema optimized for Threat Hunting.
+Standarizes raw security logs into a schema aligned with OCSF principles (Flat Version).
+Includes PII masking and Time-Series preparation.
 """
 
 from pyspark.sql import DataFrame
@@ -9,16 +10,22 @@ from pyspark.sql.types import TimestampType, IntegerType
 
 def standardize_security_logs(df: DataFrame) -> DataFrame:
     """
-    Standardizes schema for mixed security logs (Sysmon, PowerShell).
-    Handles both flat and nested JSON structures via coalescing.
+    Standardizes schema for mixed security logs.
+    Applies Privacy Masking (GDPR) and prepares Partition Key.
 
     Args:
         df (DataFrame): Raw Bronze DataFrame. 
 
     Returns:
-        DataFrame: Standardized Silver DataFrame.
+        DataFrame: Standardized Silver DataFrame with masked IPs.
     """
     df_columns = df.columns
+
+    # Helper Function: Safe Column Select
+    def safe_col(col_name: str):
+        if col_name in df_columns:
+            return F.col(col_name)
+        return F.lit(None)
 
     # Nested Fields Handling
     def secure_nested(flat_name, nested_parent, nested_field):
@@ -36,56 +43,42 @@ def standardize_security_logs(df: DataFrame) -> DataFrame:
         
         return F.coalesce(*cols_to_check)
     
-        # Helper Function: Safe Column Select
-    def safe_col(col_name: str):
-        if col_name in df_columns:
-            return F.col(col_name)
-        return F.lit(None)
+    # Business Logic: IP Masking (Privacy)
+    def mask_ip(col_expr):
+        return F.regexp_replace(col_expr, r"(\d{1,3})$", "XXX")
 
-    # Timestamp Standardization
-    timestamp_col = F.coalesce(
-        safe_col("@timestamp"),
-        safe_col("EventTime")
-    ).cast(TimestampType())
+    # --- TRANSFORMATIONS ---
 
-    # Hostname Standardization
-    host_col = F.coalesce(
-        safe_col("Hostname"),
-        safe_col("host"),
-        safe_col("Computer")
-    )
+    # Timestamp & Partition Key
+    timestamp_col = F.coalesce(safe_col("@timestamp"), safe_col("EventTime")).cast(TimestampType())
 
-    # User Standardization
-    user_col = F.coalesce(
-        safe_col("AccountName"),
-        safe_col("User"),
-        safe_col("UserID")
-    )
-
-    # Define Transformations
-    df_silver = df.select(
+    df_silver = df_select(
         timestamp_col.alias("event_timestamp"),
-
-        # Event ID
-        safe_col("EventID").cast(IntegerType()).alias("event_id"),
-
+        F.to_date(timestamp_col).alias("event_date"),
+    
+        # Event Context
+        safe_col("EventID").cast(IntegerType().alias("event_id")),
         safe_col("Channel").alias("log_channel"),
-        host_col.alias("hostname"),
-        user_col.alias("user_account"),
 
-        # Process / Execution Context
-        secure_nested("SourceImage", "EventData", "SourceImage").alias("process_image"),
-        secure_nested("TargetImage", "EventData", "TargetImage").alias("target_process_image"),
+        # Actor Context
+        safe_col("Hostname").alias("hostname"),         # OCSF: device.hostname
+        safe_col("AccountName").alias("user_account"),  # OCSF: actor.user.name
+
+        # Process Context
+        secure_nested("SourceImage", "EventData", "SourceImage").alias("process_path"),
+        secure_nested("TargetImage", "EventData", "TargetImage").alias("target_process_path"),
         secure_nested("CommandLine", "EventData", "CommandLine").alias("command_line"),
 
-        # Network Context
-        secure_nested("SourceIp", "EventData", "SourceIp").alias("source_ip"),
-        secure_nested("DestinationIp", "EventData", "DestinationIp").alias("dest_ip"),
-        secure_nested("DestinationPort", "EventData", "DestinationPort").alias("dest_port"),
+        # Network Context (Standardized & Masked)
+        # OCSF Mapping: src_endpoint.ip, dst_endpoint.ip
+        mask_ip(secure_nested("SourceIp", "EventData", "SourceIp")).alias("src_ip"),
+        mask_ip(secure_nested("DestinationIp", "EventData", "DestinationIp")).alias("dst_ip"),
 
-        # Threat Context
+        secure_nested("DestinationPort", "EventData", "DestinationPort").cast(IntegerType()).alias("dst_port"),
+
+        # Detection Context
         safe_col("tags").alias("detection_tags")
     )
 
-    # Data Quality Checks
+    # Data Quality Filter
     return df_silver.filter(F.col("event_timestamp").isNotNull())
