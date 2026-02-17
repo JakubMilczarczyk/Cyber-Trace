@@ -57,7 +57,7 @@ def standardize_security_logs(df: DataFrame) -> DataFrame:
         F.to_date(timestamp_col).alias("event_date"),
     
         # Event Context
-        safe_col("EventID").cast(IntegerType().alias("event_id")),
+        safe_col("EventID").cast(IntegerType()).alias("event_id"),
         safe_col("Channel").alias("log_channel"),
 
         # Actor Context
