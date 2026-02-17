@@ -1,78 +1,86 @@
 # 🛡️ Cyber-Trace: Security Log Analysis Pipeline
 
+![CI/CD](https://github.com/JakubMilczarczyk/Cyber-Trace/actions/workflows/ci_pipeline.yml/badge.svg)
 ![Python](https://img.shields.io/badge/Python-3.10+-blue.svg)
 ![Azure](https://img.shields.io/badge/Cloud-Azure-0078D4.svg)
 ![Databricks](https://img.shields.io/badge/Databricks-Auto_Loader-FF3621.svg)
-![Status](https://img.shields.io/badge/Status-Refactored-success.svg)
+![Status](https://img.shields.io/badge/Status-Project_Completed-success.svg)
+![License](https://img.shields.io/badge/License-MIT-green.svg)
 
-## Project Overview
-**Cyber-Trace** is a data engineering project designed to ingest, process, and analyze cybersecurity logs (focusing on **MITRE ATT&CK** scenarios).
+**Cyber-Trace** is a production-grade ETL pipeline designed to ingest, process, and analyze cybersecurity logs (Mordor Dataset) using the **Medallion Architecture**. It processes raw JSON logs into actionable threat insights while strictly adhering to **GDPR/Privacy** standards through PII masking.
 
-The goal is to build a production-ready ETL pipeline using the **Medallion Architecture** (Bronze/Silver/Gold) capable of detecting anomalies and visualizing threat patterns from raw datasets (e.g., Mordor Project).
+> **🔄 Project Context:** Originally prototyped on AWS S3, this project has been fully migrated and re-engineered on **Azure Databricks** to leverage Delta Lake, Auto Loader, and Unity Catalog integration.
 
-> **🔄 Migration Notice:** This project has been migrated from **AWS S3** to **Azure Data Lake Gen2 (ADLS)** to leverage Databricks native features like Auto Loader and Unity Catalog integration.
+## 🎯 Key Features & Business Value
 
-## Architecture & Tech Stack
-* **Cloud Infrastructure:** Azure Data Lake Gen2 (Storage) + Azure Databricks (Compute).
-* **Security:** Azure Key Vault + Databricks Secret Scopes.
-* **ETL Engine:** Apache Spark (PySpark) Structured Streaming.
-* **Ingestion Pattern:** Databricks **Auto Loader** (`cloudFiles`).
-* **Data Format:** JSON (Raw) -> Delta Lake (Planned).
+### 1. Threat Detection Dashboard
+Visualizes attack patterns (Attacker IP vs. Victim Host) to support Security Operations Centers (SOC).
+![Threat Dashboard](docs/images/dashboard.png)
+*Fig 1. Analytics Dashboard showing attack volume. Note the PII Masking (XXX) applied to the Attacker IP column to protect identity.*
 
-## Architectural Decisions Records (ADR)
-Moving from a legacy prototype to a robust cloud architecture, several key decisions were made to ensure scalability and security:
+### 2. Privacy by Design (GDPR/RODO)
+* **PII Masking:** Implemented a custom `mask_ip()` transformation in the Silver layer.
+* **Logic:** Replaces the last octet of IP addresses with `XXX` (e.g., `172.18.39.XXX`) before data reaches the analytical layer.
+* **Access Control:** Raw logs (Bronze) are restricted; Analysts work only on masked data (Silver/Gold).
 
-### 1. Ingestion: Auto Loader vs. Standard Read
-* **Decision:** Replaced standard `spark.read.json()` with Databricks **Auto Loader** (`cloudFiles`).
-* **Context:** Standard directory listing in cloud storage (S3/ADLS) is slow and expensive for large datasets.
-* **Benefit:** Auto Loader efficiently detects new files as they arrive, handles **Schema Evolution** automatically, and provides exactly-once processing guarantees via checkpointing.
+### 3. Production-Grade Engineering
+* **Structured Logging:** Centralized logging module provides clear observability into pipeline health and schema enforcement.
+![Logs](docs/images/logs.png)
+*Fig 2. System logs confirming PII Masking active and Time-Series Partitioning initialization (`partitionBy event_date`).*
 
+* **Automated Testing:** CI/CD pipeline runs `pytest` and linters on every commit to ensure code quality.
+![CI/CD](docs/images/ci_cd.png)
 
+---
 
-### 2. Security: Key Vault vs. Local Config
-* **Decision:** Migrated from local `project_config.py` files to **Azure Key Vault** backed by **Databricks Secret Scopes**.
-* **Context:** Storing credentials in code or local files poses a security risk and complicates collaboration.
-* **Benefit:** Credentials (SAS Tokens/Access Keys) are never exposed in the notebook. Access is managed via IAM roles and retrieved at runtime using `dbutils.secrets.get()`.
+## 🏗️ Architecture (V2)
 
-### 3. Fault Tolerance: Checkpointing
-* **Decision:** Implemented explicit checkpointing for the streaming query.
-* **Benefit:** Ensures the pipeline is resilient to cluster failures and restarts, resuming processing exactly where it left off without data duplication.
+The pipeline follows a **V2 Blue-Green** deployment strategy to handle schema evolution.
 
-## Getting Started
+```mermaid
+graph LR
+    Raw[("📄 Raw Logs<br>(JSON/AutoLoader)")] -->|Ingest| Bronze[("🥉 Bronze V2<br>(Delta Lake)")]
+    Bronze -->|Clean & Mask PII| Silver[("🥈 Silver V2<br>(Partitioned Delta)")]
+    Silver -->|Aggregate| Gold[("🥇 Gold V2<br>(Threat Stats)")]
+    
+    %% Styles for better visibility on light/dark mode
+    style Bronze fill:#A0522D,stroke:#333,stroke-width:2px,color:#fff
+    style Silver fill:#708090,stroke:#333,stroke-width:2px,color:#fff
+    style Gold fill:#FFD700,stroke:#333,stroke-width:2px,color:#000
+```
 
-### Prerequisites
-* Azure Subscription with **ADLS Gen2** Storage Account.
-* Azure **Key Vault** containing the storage access key.
-* Databricks Workspace (Premium tier recommended for full security features).
+* **Tech Stack:** Azure Data Lake Gen2, Databricks (PySpark), GitHub Actions, Delta Lake.
 
-### Installation & Setup
-1.  **Clone the repository:**
-    ```bash
-    git clone [https://github.com/JakubMilczarczyk/Cyber-Trace.git](https://github.com/JakubMilczarczyk/Cyber-Trace.git)
-    ```
+## 🚀 Engineering Highlights
 
-2.  **Azure Setup:**
-    * Create a container named `bronze` in your ADLS account.
-    * Upload the raw Mordor logs (JSON) to a `raw_logs` folder.
-    * Add your Storage Access Key to Azure Key Vault (Name: `storage-access-key`).
+* **OCSF Alignment:** Refactored schema to align with Open Cybersecurity Schema Framework standards (mapped `SourceIp` → `src_ip`, `SourceImage` → `process_path`).
+* **Performance:** Silver tables are partitioned by `event_date` to enable **Partition Pruning**, significantly reducing query costs for historical analysis.
+* **FinOps:** Uses `Trigger.AvailableNow` to process data in micro-batches, saving ~90% of compute costs compared to 24/7 streaming.
+* **Defensive Coding:** Custom `secure_nested()` logic handles Schema Drift in complex JSONs without crashing the stream.
 
-3.  **Databricks Configuration:**
-    * Create a Secret Scope named `cybertrace-secrets` linked to your Key Vault.
-    * Verify access in a notebook:
-        ```python
-        dbutils.secrets.list("cybertrace-secrets")
-        ```
+## 📂 Project Structure
+```text
+├── src/
+│   ├── transformations.py  # Core Logic: PII Masking, OCSF Mapping
+│   ├── logger.py           # Structured Logging Module
+│   └── config.py           # Configuration & Path Management
+├── tests/                  # Unit Tests (Pytest)
+├── notebooks/              # Databricks Notebooks (01_Ingest, 02_Silver, 03_Gold)
+└── docs/
+    ├── adr/                # Architecture Decision Records
+    └── images/             # Documentation screenshots
+```
 
-4.  **Run the Pipeline:**
-    * Open `notebooks/01_ingest_bronze.ipynb`.
-    * Run the initialization cell to configure authentication.
-    * Run the streaming cell to start ingesting data.
+## 🛠️ How to Run
 
-## Roadmap
-- [x] **Phase 1:** Ingestion (Bronze Layer) - Migrated to Azure & Auto Loader.
-- [ ] **Phase 2:** Transformation (Silver Layer) - Data Cleaning & Schema Enforcement (Delta Lake).
-- [ ] **Phase 3:** Aggregation (Gold Layer) - Business Logic & Threat Metrics.
-- [ ] **Phase 4:** CI/CD & Unit Testing.
+1.  **Prerequisites:** Azure Subscription (ADLS Gen2, Key Vault) & Databricks Workspace.
+2.  **Setup:**
+    * Clone the repo.
+    * Configure secrets in Azure Key Vault.
+3.  **Execution:**
+    * Run `notebooks/01_ingest_mordor_logs` (Ingest Raw -> Bronze V2).
+    * Run `notebooks/02_silver_transformations` (Bronze -> Silver V2 with Masking).
+    * Run `notebooks/03_gold_business_analytics` (Silver -> Gold Dashboard).
 
 ---
 *Author: Jakub Milczarczyk*
