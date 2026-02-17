@@ -1,6 +1,6 @@
 # 🛡️ Cyber-Trace: Security Log Analysis Pipeline
 
-![CI/CD](https://github.com/JakubMilczarczyk/Cyber-Trace/actions/workflows/ci-cd.yml/badge.svg)
+![CI/CD](https://github.com/JakubMilczarczyk/Cyber-Trace/actions/workflows/ci_pipeline.yml/badge.svg)
 ![Python](https://img.shields.io/badge/Python-3.10+-blue.svg)
 ![Azure](https://img.shields.io/badge/Cloud-Azure-0078D4.svg)
 ![Databricks](https://img.shields.io/badge/Databricks-Auto_Loader-FF3621.svg)
@@ -43,9 +43,10 @@ graph LR
     Bronze -->|Clean & Mask PII| Silver[("🥈 Silver V2<br>(Partitioned Delta)")]
     Silver -->|Aggregate| Gold[("🥇 Gold V2<br>(Threat Stats)")]
     
-    style Bronze fill:#cd7f32,stroke:#333
-    style Silver fill:#c0c0c0,stroke:#333
-    style Gold fill:#ffd700,stroke:#333
+    %% Styles for better visibility on light/dark mode
+    style Bronze fill:#A0522D,stroke:#333,stroke-width:2px,color:#fff
+    style Silver fill:#708090,stroke:#333,stroke-width:2px,color:#fff
+    style Gold fill:#FFD700,stroke:#333,stroke-width:2px,color:#000
 ```
 
 * **Tech Stack:** Azure Data Lake Gen2, Databricks (PySpark), GitHub Actions, Delta Lake.
