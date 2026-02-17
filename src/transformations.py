@@ -52,7 +52,7 @@ def standardize_security_logs(df: DataFrame) -> DataFrame:
     # Timestamp & Partition Key
     timestamp_col = F.coalesce(safe_col("@timestamp"), safe_col("EventTime")).cast(TimestampType())
 
-    df_silver = df_select(
+    df_silver = df.select(
         timestamp_col.alias("event_timestamp"),
         F.to_date(timestamp_col).alias("event_date"),
     
